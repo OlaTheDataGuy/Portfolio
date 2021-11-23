@@ -1,0 +1,151 @@
+
+-- COVID ProjectPortfolio
+
+create table deaths (
+iso_code varchar, continent varchar, location varchar,
+date date, population bigint, total_cases int, new_cases int,
+new_cases_smoothed decimal, total_deaths int, new_deaths int,
+new_deaths_smoothed decimal, total_cases_per_million decimal,
+new_cases_per_million decimal, new_cases_smoothed_per_million decimal,
+total_deaths_per_million decimal, new_deaths_per_million decimal,
+new_deaths_smoothed_per_million decimal, reproduction_rate decimal,
+icu_patients int, icu_patients_per_million decimal,
+hosp_patients int, hosp_patients_per_million decimal,
+weekly_icu_admissions decimal,
+weekly_icu_admissions_per_million decimal,
+weekly_hosp_admissions decimal,
+weekly_hosp_admissions_per_million decimal
+);
+
+copy deaths from 'C:\Program Files\PostgreSQL\10\SQL Covid DATA\Deaths.csv' CSV header;
+
+
+create table Vaccinations (
+iso_code varchar, continent varchar, location varchar, date date, new_tests bigint, total_tests bigint,
+total_tests_per_thousand decimal, new_tests_per_thousand decimal, new_tests_smoothed bigint,
+new_tests_smoothed_per_thousand decimal, positive_rate decimal, tests_per_case decimal,
+tests_units varchar, total_vaccinations bigint, people_vaccinated bigint, people_fully_vaccinated bigint,
+total_boosters bigint,  new_vaccinations int, new_vaccinations_smoothed bigint,
+total_vaccinations_per_hundred decimal, people_vaccinated_per_hundred decimal,
+people_fully_vaccinated_per_hundred decimal, total_boosters_per_hundred decimal,
+new_vaccinations_smoothed_per_million decimal, stringency_index decimal, population_density decimal,
+median_age decimal, aged_65_older decimal, aged_70_older decimal, gdp_per_capital decimal,
+extreme_poverty decimal, cardiovasc_death_rate decimal, diabetes_prevalence decimal,
+female_smokers decimal, male_smokers decimal, handwashing_facilities decimal,
+hospital_beds_per_thousand decimal, life_expectancy decimal, human_development_index decimal,
+excess_mortality_cumulative_absolute decimal, excess_mortality_cumulative decimal,
+excess_mortality decimal, excess_mortality_cumulative_per_million decimal	
+);
+
+copy vaccinations from 'C:\Program Files\PostgreSQL\10\SQL Covid DATA\Vaccinations.csv' CSV header;
+
+select * from vaccinations;
+
+select * from deaths;
+
+
+
+-- Total Deaths vs Total Cases
+
+Select Location, date, total_cases,total_deaths, 
+(total_deaths::numeric / total_cases) * 100 as Death_Percentage, population
+From Deaths;
+
+
+
+-- Percentage of population infected with COVID
+
+Select Location, date, Population, total_cases,
+(total_cases::numeric /population)*100 as Infected_Population
+From Deaths
+where location like '%Emirates%'
+order by 1,2;
+
+
+
+-- Total Death Records
+
+Select date, location, total_cases, total_deaths
+From Deaths
+where total_deaths is not null
+group by total_deaths, date, total_cases,location
+having location like '%Emirates%'
+order by date;
+
+
+
+-- High Infection Rate per Country
+
+Select Location, Population, Max(total_cases) as Highest_Infection_Count, 
+Max((total_cases::decimal/population))*100 as Percentage_Population_Infected
+from Deaths
+where continent is not null
+Group by Location, Population
+order by Highest_Infection_Count;
+
+
+-- Total Cases and Death Count per Country Population
+
+Select Location, population, max(total_cases) as Total_Cases_Count,
+max(Total_deaths) as Total_Death_Count
+from Deaths
+Where total_cases is not null 
+Group by Location, population
+order by Total_Death_Count;
+
+
+
+-- Population vs Vaccinations Using Partition
+
+Select d.continent, d.location, d.date, d.population, v.new_vaccinations, 
+SUM(v.new_vaccinations) OVER (Partition by d.location
+Order by d.location, d.Date) as Rolling_Vaccinated_count
+From Deaths as d
+Join Vaccinations as v
+	On d.location = v.location
+	and d.date = v.date
+where d.continent is not null 
+order by 2,3
+
+
+
+--- Percentage per Population with CTE on Partition
+
+With Var (Continent, Location, Date, Population, New_Vaccinations, Rolling_Vaccinated_count)
+as
+(
+Select d.continent, d.location, d.date, d.population, v.new_vaccinations, 
+SUM(v.new_vaccinations) OVER (Partition by d.location
+Order by d.location, d.Date) as Rolling_Vaccinated_count
+From Deaths as d
+Join Vaccinations as v
+	On d.location = v.location
+	and d.date = v.date
+where d.continent is not null 
+)
+select * , (Rolling_Vaccinated_count::decimal/population)*100 as Rolling_Vaccinated_Percentage
+from Var
+where new_vaccinations is not null;
+
+
+
+
+-- View data
+
+Create View PercentageOFVaccinated as
+With Vacc (Continent, Location, Date, Population, New_Vaccinations, Rolling_Vaccinated_count)
+as
+(
+Select d.continent, d.location, d.date, d.population, v.new_vaccinations, 
+SUM(v.new_vaccinations) OVER (Partition by d.location
+Order by d.location, d.Date) as Rolling_Vaccinated_count
+From Deaths as d
+Join Vaccinations as v
+	On d.location = v.location
+	and d.date = v.date
+where d.continent is not null 
+)
+select * , (Rolling_Vaccinated_count::decimal/population)*100 as Percentage_0f_Vaccinated
+from Vacc
+where new_vaccinations is not null;
+
