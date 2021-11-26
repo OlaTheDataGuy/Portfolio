@@ -1,0 +1,94 @@
+
+
+
+----  NASHVILLE HOUSING DATA CLEANING USING POSTGRESQL ----
+
+
+-- Create Table ----
+
+CREATE TABLE housing (
+UniqueID 	int, ParcelID	varchar, LandUse varchar, PropertyAddress varchar,
+SaleDate date,	SalePrice	bigint, LegalReference	varchar,
+SoldAsVacant	varchar, OwnerName	varchar, OwnerAddress	varchar,
+Acreage	decimal, TaxDistrict varchar, LandValue	bigint, BuildingValue	bigint,
+TotalValue	bigint, YearBuilt	int, Bedrooms	int, FullBath	int, HalfBath int
+);
+
+
+COPY housing FROM 'C:\Program Files\PostgreSQL\10\data\Sample Data\housing.csv' CSV header;
+
+
+SELECT * FROM housing
+
+
+--- Clean Property Address & Update Table ---
+
+SELECT DISTINCT uniqueID,  COALESCE (PropertyAddress, 'Address Not Available')
+FROM housing
+WHERE propertyaddress is NULL
+
+
+Update housing
+SET PropertyAddress = COALESCE (PropertyAddress, 'Address Not Available')
+WHERE PropertyAddress is null;
+
+
+SELECT * FROM housing
+
+
+SELECT BTRIM (SPLIT_PART (propertyaddress, ',' , 1)) propertysplitAddress,
+BTRIM (SPLIT_PART (propertyaddress, ',' , 2)) PropertySplitCity
+FROM housing
+
+
+ALTER TABLE housing
+ADD propertysplitAddress varchar(255)
+
+
+Update housing
+SET PropertySplitAddress = BTRIM (SPLIT_PART (propertyaddress, ',' , 1))
+
+
+ALTER TABLE housing
+ADD PropertySplitCity varchar(255)
+
+
+Update housing
+SET PropertySplitCity = BTRIM (SPLIT_PART (propertyaddress, ',' , 2)) 
+
+
+---- Change Y to Yes AND N to No ---
+
+SELECT DISTINCT soldasvacant
+FROM housing
+
+
+SELECT SoldAsVacant, 
+CASE WHEN SoldAsVacant = 'Y' THEN 'Yes'
+	 WHEN SoldAsVacant = 'N' THEN 'No'
+	 ELSE SoldAsVacant
+	 END
+From housing
+
+
+UPDATE housing
+SET Soldasvacant = CASE WHEN SoldAsVacant = 'Y' THEN 'Yes'
+	 WHEN SoldAsVacant = 'N' THEN 'No'
+	 ELSE SoldAsVacant
+	 END
+
+
+---- Remove Duplicates Using CTE -----
+
+WITH Remove AS (
+	
+SELECT *,
+ROW_NUMBER() OVER ( PARTITION BY ParcelID, PropertyAddress,
+SalePrice, SaleDate, LegalReference
+ORDER BY UniqueID) row_num
+FROM housing
+)
+
+SELECT * FROM Remove
+WHERE row_num > 1
+ORDER BY propertyaddress
